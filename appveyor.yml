@@ -12,7 +12,7 @@ before_build:
   # Display minimal restore text
   - cmd: dotnet restore RealNumbers.sln --verbosity m
 build_script:
-  - ps: dotnet --verbosity build RealNumbers.sln 
+  - ps: dotnet build RealNumbers.sln --verbosity m
 test_script:
   # restore packages for our unit tests
   - cmd: dotnet restore ./src/RealNumbers.UnitTests/RealNumbers.UnitTests.csproj --verbosity m
