@@ -263,6 +263,7 @@
 
             result = d1mantissa * d2mantissa;
             expresult = d1exp + d2exp;
+            resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
 
             if (expresult != 0)
