@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <AssemblyName>RealNumbers.Benchmarks</AssemblyName>
+    <RootNamespace>RealNumbers.Benchmarks</RootNamespace>
+    <CodeAnalysisRuleSet>RealNumbers.Benchmarks.ruleset</CodeAnalysisRuleSet>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <IsPackable>false</IsPackable>
+    <Copyright>Copyright (c) Adam Jones</Copyright>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <StartupObject>RealNumbers.Benchmarks.Program</StartupObject>
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="BenchmarkDotNet.Artifacts\**" />
+    <EmbeddedResource Remove="BenchmarkDotNet.Artifacts\**" />
+    <None Remove="BenchmarkDotNet.Artifacts\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.10.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RealNumbers\RealNumbers.csproj" />
+  </ItemGroup>
+
+</Project>
