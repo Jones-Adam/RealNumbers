@@ -1,7 +1,9 @@
 # RealNumbers
 This is an open source c# library for representing Real numbers.  In this library we used Real numbers to refer to the set of numbers which includes whole numbers (integers), rational numbers (fractions), decimal numbers
 
-Targeting .netstandard2.0 and .net 4.7.1
+The library is build for both .netstandard2.0 and .net 4.7.1
+
+Current CI build status is: [![Build status](https://ci.appveyor.com/api/projects/status/ixcmdlx1qaf2qner/branch/master?svg=true)](https://ci.appveyor.com/project/Jones-Adam/realnumbers/branch/master)
 
 RealNumbers is covered under the terms of the [MIT/X11](LICENSE.md) license. You may therefore link to it and use it in both opensource and proprietary software projects.
 
