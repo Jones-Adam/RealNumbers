@@ -7,7 +7,7 @@
     [DisassemblyDiagnoser(printAsm: true)]
     public class RealIntegerMultiplyBenchmarks
     {
-        [Params(10)]
+        [Params(100)]
         public int N;
 
         private int dataint;

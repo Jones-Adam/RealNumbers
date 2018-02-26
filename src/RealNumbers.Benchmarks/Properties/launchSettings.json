@@ -1,7 +1,8 @@
 {
   "profiles": {
     "GeoMath.Benchmarks": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "RealDecimalAdditionBenchmarks"
     }
   }
 }

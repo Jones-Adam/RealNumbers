@@ -14,22 +14,23 @@
     }
 
     [StructLayout(LayoutKind.Explicit, Size = 8)]
-    public readonly struct Real64 : IEquatable<Real64>, IComparable<Real64>
+    public readonly struct Real64 : IEquatable<Real64>, IComparable<Real64>, IRealNumber
     {
         // Flags
         private const byte flagSpecial =        0b11000;
         private const byte flagPositiveLimit =  0b11010;
         private const byte flagNegativeLimit =  0b11011;
-        private const byte flagFraction =       0b01000;
-        private const ulong flagDecimal =        0b11000ul;
-        private const byte flagRootNumbers =    0b10000;
+        private const byte flagFraction =       0b_0100_0000;
+        private const byte flagInteger =        0b_1111_1110;
+        private const byte flagDecimal =        0b_1110_0000;
+        private const byte flagRootNumbers =    0b_0010_0000;
         private const byte flagOffset =         0b00111;
-        private const byte flagFullOffset =         0b00111000;
-        private const ulong flagInteger = 0b11111ul;
+        private const byte flagFullOffset =     0b00111000;
+
 
         private const ulong specialPositiveInfinity = 0x00_00_00_00_00_00_00_58uL;
         private const ulong specialNegativeInfinity = 0x00_00_00_00_00_00_00_78uL;
-        private const ulong specialNaN =              0xC0_00_00_00_00_00_00_D8uL;
+        private const ulong specialNaN =              0x00_00_00_00_00_00_00_D8uL;
         private const ulong specialPI =               0xC0_00_00_00_00_00_01_18uL;
         private const ulong speciale =                0xC0_00_00_00_00_00_02_18uL;
 
@@ -60,6 +61,7 @@
         private const ulong maxlong = 0x7FFFFFFFFFFFFFF;
 
         [FieldOffset(0)] readonly ulong unum;
+        [FieldOffset(0)] readonly byte header;
 
         public static readonly Real64 PositiveInfinity = new Real64(specialPositiveInfinity);
 
@@ -75,9 +77,11 @@
 
         public bool IsNaN => (unum & specialNaN) == specialNaN;
 
-        public bool IsDecimal => (unum & flagDecimal) == 0;
+        public bool IsDecimal => (header & flagDecimal) == 0;
 
-        public bool IsInteger => (unum & flagInteger) <= 1;
+        public bool IsInteger => (header & flagInteger) == 0;
+
+        public bool IsFraction => (header & flagFraction) == flagFraction;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetOffset()
@@ -161,6 +165,7 @@
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Real64(ulong num)
         {
+            this.header = 0;
             this.unum = num;
         }
         // int fiveBits = normal & 0x1f;
@@ -202,8 +207,7 @@
             {
                 result = d1mantissa + d2mantissa;
                 expresult = d1exp;
-                int sigbit2 = (result < 0) ? CountMinimumByteSegments((ulong)~result) : CountMinimumByteSegments((ulong)result);
-                resultOffset = Math.Max(sigbit2, 1);
+                resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             }
             else
             {
@@ -215,7 +219,7 @@
 
             if (expresult != 0)
             {
-                final |= (ulong)expresult;
+                final |= (ulong)expresult << 8;
             }
             return new Real64(final);
         }
@@ -259,7 +263,6 @@
 
             result = d1mantissa * d2mantissa;
             expresult = d1exp + d2exp;
-            resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
 
             if (expresult != 0)
@@ -268,6 +271,47 @@
                 final |= ((ulong)expresult & offsetMasks[resultOffset]) << 8;
             }
             return new Real64(final);
+        }
+
+        private static Real64 FractionAdd(Real64 r1, Real64 r2)
+        {
+            (long demoniator1, long numerator1) = r1.GetSegments();
+            (long demoniator2, long numerator2) = r2.GetSegments();
+            if (demoniator1 == demoniator2)
+            {
+                long finalnum = numerator1 + numerator2;
+                int offset = r1.GetOffset();
+                ulong offsetmask = offsetMasks[offset] << 8;               
+                ulong h = (r1.unum & ~offsetmask) | (((ulong)finalnum << 8) & offsetmask);
+                return new Real64(h);
+            }
+            throw new NotImplementedException();
+        }
+
+        private static Real64 FractionSub(Real64 r1, Real64 r2)
+        {
+            (long demoniator1, long numerator1) = r1.GetSegments();
+            (long demoniator2, long numerator2) = r2.GetSegments();
+            if (demoniator1 == demoniator2)
+            {
+                long finalnum = numerator1 - numerator2;
+                int offset = r1.GetOffset();
+                ulong offsetmask = offsetMasks[offset] << 8;
+                ulong h = (r1.unum & ~offsetmask) | (((ulong)finalnum << 8) & offsetmask);
+                return new Real64(h);
+            }
+            throw new NotImplementedException();
+        }
+
+        private static Real64 FractionMul(Real64 r1, Real64 r2)
+        {
+            (long demoniator1, long numerator1) = r1.GetSegments();
+            (long demoniator2, long numerator2) = r2.GetSegments();
+            long finaldenominator = demoniator1 * demoniator2;
+            long finalnumerator = numerator1 * numerator2;
+            int offset = 1 + ((finalnumerator < 0) ? CountMinimumByteSegments((ulong)~finalnumerator) : CountMinimumByteSegments((ulong)finalnumerator));
+            ulong h = ((ulong)finaldenominator << (8 * offset)) | ((ulong)finalnumerator << 8) | ((ulong)offset ^ flagFraction);
+            return new Real64(h);
         }
 
         public static Real64 operator +(Real64 r1, Real64 r2)
@@ -286,6 +330,11 @@
             {
                 return DecimalAdd(r1, r2);
             }
+
+            if (r1.IsFraction && r2.IsFraction)
+            {
+                return FractionAdd(r1, r2);
+            }
             else
             {
                 throw new NotImplementedException();
@@ -294,10 +343,26 @@
 
         public static Real64 operator -(Real64 r1, Real64 r2)
         {
+            if (r1.IsInteger && r2.IsInteger)
+            {
+                return IntegerSub(r1, r2);
+            }
+
             if (r1.IsInfinity || r2.IsInfinity)
             {
                 return r2;
             }
+
+            if (r1.IsDecimal && r2.IsDecimal)
+            {
+                return DecimalSub(r1, r2);
+            }
+
+            if (r1.IsFraction && r2.IsFraction)
+            {
+                return FractionSub(r1, r2);
+            }
+
 
             long result = 0;
             long expresult;
@@ -352,6 +417,11 @@
                 return DecimalMul(r1, r2);
             }
 
+            if (r1.IsFraction && r2.IsFraction)
+            {
+                return FractionMul(r1, r2);
+            }
+
             throw new NotImplementedException();
         }
 
@@ -370,12 +440,12 @@
             return FromInt(v);
         }
 
-        public static implicit operator Real64(double d)
+        public static explicit operator Real64(double d)
         {
             return FromDouble(d);
         }
 
-        public static implicit operator Real64(decimal d)
+        public static explicit operator Real64(decimal d)
         {
             return FromDecimal(d);
         }
@@ -551,6 +621,13 @@
 
         public Decimal ToDecimal()
         {
+            if (IsFraction)
+            {
+                (long demoniator, long numerator) = GetSegments();
+                decimal d = new decimal(numerator) / new decimal(demoniator);
+                return d;
+            }
+
             (long mantissa, long exp) = GetSegments();
             bool negative = false;
             if (mantissa < 0)

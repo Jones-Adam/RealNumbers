@@ -8,7 +8,7 @@
     [DisassemblyDiagnoser(printAsm: true)]
     public class RealIntegerAdditionBenchmarks
     {
-        [Params(10, 100)]
+        [Params(100)]
         public int N;
 
         private int dataint;

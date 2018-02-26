@@ -4,10 +4,9 @@
     using System.Globalization;
     using BenchmarkDotNet.Attributes;
 
-    [DisassemblyDiagnoser(printAsm: true)]
     public class RealDecimalAdditionBenchmarks
     {
-        [Params(10)]
+        [Params(100)]
         public int N;
 
         private float datafloat;

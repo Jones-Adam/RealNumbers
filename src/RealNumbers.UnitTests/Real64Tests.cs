@@ -96,6 +96,7 @@
         public void FromInteger(int num)
         {
             Real64 r = num;
+            Assert.True(r.IsInteger);
             Assert.False(r.IsInfinity);
             Assert.False(r.IsNaN);
             Assert.False(r.IsNegativeInfinity);
@@ -115,7 +116,7 @@
         [InlineData(0)]
         public void FromDouble(double num)
         {
-            Real64 r = num;
+            Real64 r = (Real64)num;
             Assert.False(r.IsInfinity);
             Assert.False(r.IsNaN);
             Assert.False(r.IsNegativeInfinity);
@@ -139,7 +140,8 @@
         [InlineData(50)]
         public void FromDecimal(decimal num)
         {
-            Real64 r = num;
+            Real64 r = (Real64)num;
+            Assert.True(r.IsDecimal);
             Assert.False(r.IsInfinity);
             Assert.False(r.IsNaN);
             Assert.False(r.IsNegativeInfinity);
@@ -153,22 +155,8 @@
         [InlineData(double.NaN)]
         public void FromDoubleSpecials(double num)
         {
-            Real64 r = num;
+            Real64 r = (Real64)num;
             Assert.Equal(num, r.ToDouble());
-        }
-
-        [Theory]
-        [InlineData(1, 100000)]
-        [InlineData(-4, 10)]
-        [InlineData(4, -10)]
-        [InlineData(-4, -10)]
-        [InlineData(4, 10)]
-        public void FromFraction(int numerator, int denominator)
-        {
-            Real64 r = Real64.FromFraction(numerator, denominator);
-            var fraction = r.ToFraction();
-            Assert.Equal(numerator, fraction.numerator);
-            Assert.Equal(denominator, fraction.denominator);
         }
 
         [Fact]
