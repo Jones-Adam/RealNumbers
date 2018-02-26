@@ -1,0 +1,21 @@
+image: Visual Studio 2017
+platform: x64
+configuration: Release
+branches:
+  only:
+  - master
+test: off
+deploy: off
+before_build:
+  # Display .NET Core version
+  - cmd: dotnet --version
+  # Display minimal restore text
+  - cmd: dotnet restore RealNumbers.sln --verbosity m
+build_script:
+  - ps: dotnet --verbose build RealNumbers.sln
+test_script:
+  # restore packages for our unit tests
+  - cmd: dotnet restore ./src/RealNumbers.UnitTests/RealNumbers.UnitTests.csproj --verbosity m
+  # run the unit tests (requires changing into the test directory)
+  - cmd: cd src/RealNumbers.UnitTests
+  - cmd: dotnet test
