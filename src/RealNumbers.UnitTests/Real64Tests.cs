@@ -40,8 +40,13 @@
             Assert.Equal(expected, radd.ToInteger());
         }
 
-        [Theory(Skip ="Broken")]
+        [Theory]
         [InlineData(0.5d, 0.5d, 0.25d)]
+        [InlineData(0.1d, 0.5d, 0.05d)]
+        [InlineData(5d, 0.5d, 2.5d)]
+        [InlineData(0.01d, 0.001d, 0.00001d)]
+        [InlineData(5.1d, 4.3d, 21.93d)]
+        [InlineData(0.9d, 3.9d, 3.51d)]
         public void DecimalMultiplication(double num1, double num2, double expected)
         {
             Real64 r1 = Real64.FromDouble(num1);
@@ -130,6 +135,8 @@
         [InlineData(0)]
         [InlineData(-1)]
         [InlineData(-10097)]
+        [InlineData(0.5)]
+        [InlineData(50)]
         public void FromDecimal(decimal num)
         {
             Real64 r = num;

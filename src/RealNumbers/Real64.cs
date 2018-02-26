@@ -253,27 +253,19 @@
         {
             long result;
             long expresult;
-            int resultOffset;
+            int resultOffset = 1;
             (long d1mantissa, long d1exp) = r1.GetSegments();
             (long d2mantissa, long d2exp) = r2.GetSegments();
-            if (d1exp == d2exp)
-            {
-                result = d1mantissa * d2mantissa;
-                expresult = d1exp;
-                int sigbit2 = (result < 0) ? CountMinimumByteSegments((ulong)~result) : CountMinimumByteSegments((ulong)result);
-                resultOffset = Math.Max(sigbit2, 1);
-            }
-            else
-            {
-                result = 0;
-                expresult = 0;
-                resultOffset = 1;
-            }
+
+            result = d1mantissa * d2mantissa;
+            expresult = d1exp + d2exp;
+            resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
 
             if (expresult != 0)
             {
-                final |= (ulong)expresult;
+                ulong temp = ((ulong)expresult & offsetMasks[resultOffset]) << 8;
+                final |= ((ulong)expresult & offsetMasks[resultOffset]) << 8;
             }
             return new Real64(final);
         }
@@ -540,9 +532,21 @@
             }
 
             f = (f & ~SignMask) >> 16;
+            f = -f & 0xFF;
 
             h = h << 16 | ((ulong)f << 8) | 2ul;
-            return new Real64((ulong)h);
+            return new Real64(h);
+        }
+
+        private long Pow(long exp)
+        {
+            long x = 1;
+            for (int i = 0; i < exp; i++)
+            {
+                x *= 10;
+            }
+
+            return x;
         }
 
         public Decimal ToDecimal()
@@ -554,6 +558,15 @@
                 mantissa = -mantissa;
                 negative = true;
             }
+            if (exp < 0)
+            {
+                exp = -exp;
+            }
+            else
+            {
+                mantissa = mantissa * Pow(exp);
+            }
+
             int low = (int)mantissa;
             int mid = (int)(mantissa >> 32);
             return new Decimal(low, mid, 0, negative, (byte)exp);
