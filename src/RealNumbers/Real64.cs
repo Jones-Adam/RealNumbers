@@ -19,22 +19,19 @@
         private delegate Real64 RealBinaryOperator(Real64 r1, Real64 r2);
 
         // Flags
-        private const byte flagSpecial =        0b11000;
-        private const byte flagPositiveLimit =  0b11010;
-        private const byte flagNegativeLimit =  0b11011;
         private const byte flagFraction =       0b_0100_0000;
         private const byte flagInteger =        0b_1111_1110;
         private const byte flagDecimal =        0b_1110_0000;
         private const byte flagRootNumbers =    0b_0010_0000;
-        private const byte flagOffset =         0b00111;
-        private const byte flagFullOffset =     0b00111000;
 
 
-        private const ulong specialPositiveInfinity = 0x00_00_00_00_00_00_00_58uL;
-        private const ulong specialNegativeInfinity = 0x00_00_00_00_00_00_00_78uL;
-        private const ulong specialNaN =              0x00_00_00_00_00_00_00_D8uL;
-        private const ulong specialPI =               0xC0_00_00_00_00_00_01_18uL;
-        private const ulong speciale =                0xC0_00_00_00_00_00_02_18uL;
+        private const ulong specialPositiveInfinity = 0x00_00_00_00_00_00_02_10uL;
+        private const ulong specialNegativeInfinity = 0x00_00_00_00_00_00_03_10uL;
+        private const ulong specialNaN =              0x00_00_00_00_00_00_04_10uL;
+        private const ulong specialPI =               0x00_00_00_00_00_00_08_10uL;
+        private const ulong specialE =                0x00_00_00_00_00_00_09_10uL;
+        private const ulong specialPIDecimal =        0x1C_92_97_24_36_DA_F3_02uL;
+        private const ulong specialEDecimal =         0x18_B8_FE_3A_54_2F_F3_02uL;
 
         private const ulong OffsetMask = 0x00_00_00_00_00_00_00_07uL;
 
@@ -71,6 +68,10 @@
 
         public static readonly Real64 NaN = new Real64(specialNaN);
 
+        public static readonly Real64 PI = new Real64(specialPI);
+
+        public static readonly Real64 E = new Real64(specialE);
+
         public bool IsInfinity => (IsPositiveInfinity || IsNegativeInfinity);
 
         public bool IsPositiveInfinity => unum == specialPositiveInfinity;
@@ -84,6 +85,19 @@
         public bool IsInteger => (header & flagInteger) == 0;
 
         public bool IsFraction => (header & flagFraction) == flagFraction;
+
+        private static Real64 ConvertSpecialToDecimal(Real64 r)
+        {
+            switch (r.unum)
+            {
+                case specialPI:
+                    return new Real64(specialPIDecimal);
+                case specialE:
+                    return new Real64(specialEDecimal);
+                default:
+                    throw new NotImplementedException("Unknown Special");
+            }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetOffset()
@@ -219,39 +233,106 @@
         {
             long result;
             long expresult;
-            int resultOffset;
+            int resultOffset = 1;
             (long d1mantissa, long d1exp) = r1.GetSegments();
             (long d2mantissa, long d2exp) = r2.GetSegments();
             if (d1exp == d2exp)
             {
                 result = d1mantissa + d2mantissa;
                 expresult = d1exp;
-                resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
+                resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             }
             else
             {
-                result = 0;
-                expresult = 0;
-                resultOffset = 1;
+                if (d2exp < d1exp)
+                {
+                    long difference = d1exp - d2exp;
+                    long g = d1mantissa * (long)Math.Pow(10, difference);
+                    result = g + d2mantissa;
+                    expresult = d1exp - difference;
+                }
+                else
+                {
+                    long difference = d2exp - d1exp;
+                    long g = d2mantissa * (long)Math.Pow(10, difference);
+                    result = g + d1mantissa;
+                    expresult = d2exp - difference;
+                }
+                resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
             }
-            ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
+            ulong final = ((ulong)result << (resultOffset * 8)) | ((uint)resultOffset & 0xF);
 
             if (expresult != 0)
             {
-                final |= (ulong)expresult << 8;
+                final |= ((ulong)expresult & offsetMasks[resultOffset]) << 8;
             }
             return new Real64(final);
         }
 
-        private static Real64 AddDecDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
+        private static Real64 AddDecDecS(Real64 r1, Real64 r2)
+        {
+            if (r2.IsNaN)
+            {
+                return Real64.NaN;
+            }
+
+            if (r2.IsInfinity)
+            {
+                return r2;
+            }
+
+            return AddDecDec(r1, ConvertSpecialToDecimal(r2));
+        }
+
         private static Real64 AddDecRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
+
+        private static Real64 AddDecSDecS(Real64 r1, Real64 r2)
+        {
+            if (r1.IsPositiveInfinity)
+            {
+                return (r2.IsNegativeInfinity) ? new Real64(0ul) : r1;
+            }
+            if (r1.IsNegativeInfinity)
+            {
+                return (r2.IsPositiveInfinity) ? new Real64(0ul) : r1;
+            }
+            if (r2.IsPositiveInfinity)
+            {
+                return r2;
+            }
+            if (r2.IsNegativeInfinity)
+            {
+                return r2;
+            }
+            if (r1.IsNaN || r2.IsNaN)
+            {
+                return Real64.NaN;
+            }
+
+            // TODO: if sign is different and same special return 0;
+
+            return AddDecDec(ConvertSpecialToDecimal(r1), ConvertSpecialToDecimal(r2));
+        }
+
+        private static Real64 AddDecSRoot(Real64 r1, Real64 r2)
+        {
+            if (r1.IsNaN)
+            {
+                return Real64.NaN;
+            }
+
+            if (r1.IsInfinity)
+            {
+                return r1;
+            }
+
+            return AddDecRoot(ConvertSpecialToDecimal(r1), r2);
+        }
         private static Real64 AddDecSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
         private static Real64 AddDecSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
@@ -924,6 +1005,14 @@
                 return d;
             }
 
+            switch (this.unum)
+            {
+                case specialPI:
+                    return (new Real64(specialPIDecimal)).ToDecimal();
+                case specialE:
+                    return (new Real64(specialEDecimal)).ToDecimal();
+            }
+
             (long mantissa, long exp) = GetSegments();
             bool negative = false;
             if (mantissa < 0)
@@ -937,7 +1026,7 @@
             }
             else
             {
-                mantissa = mantissa * Pow(exp);
+                //mantissa = mantissa * Pow(exp);
             }
 
             int low = (int)mantissa;

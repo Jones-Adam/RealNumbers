@@ -3,26 +3,8 @@
     using System;
     using Xunit;
 
-    public class Real64Tests
+    public class Real64CreationTests
     {
-        [Theory]
-        [InlineData(3, 4, 7)]
-        [InlineData(3, -4, -1)]
-        [InlineData(-3, 4, 1)]
-        [InlineData(-1, 1, 0)]
-        [InlineData(-1, -1, -2)]
-        [InlineData(0, 1, 1)]
-        [InlineData(3, 3, 6)]
-        [InlineData(0, 0, 0)]
-        [InlineData(-2147483648, 2147483647, -1)]
-        public void IntegerAddition(int num1, int num2, int expected)
-        {
-            Real64 r1 = num1;
-            Real64 r2 = num2;
-            Real64 radd = r1 + r2;
-            Assert.Equal(expected, radd.ToInteger());
-        }
-
         [Theory]
         [InlineData(3, 4, 12)]
         [InlineData(3, -4, -12)]
@@ -53,19 +35,6 @@
             Real64 r2 = Real64.FromDouble(num2);
             Real64 radd = r1 * r2;
             Assert.Equal(expected, radd.ToDouble());
-        }
-
-        [Fact]
-        public void IntegerCountup()
-        {
-            Real64 r1 = 3;
-            Real64 r2 = 7;
-            for (int i = 0; i < 100000000; i++)
-            {
-                r1 = r1 + r2;
-            }
-
-            Assert.Equal(700000003, r1.ToInteger());
         }
 
         [Theory]
@@ -131,7 +100,7 @@
         [InlineData(0.9)]
         [InlineData(0.1)]
         [InlineData(1.4343434)]
-        [InlineData(1231232.123123)]
+        [InlineData(1231232.787981)]
         [InlineData(-1231113.123)]
         [InlineData(0)]
         [InlineData(-1)]
@@ -159,6 +128,21 @@
             Assert.Equal(num, r.ToDouble());
         }
 
+        [Theory]
+        [InlineData(1, 100000)]
+        [InlineData(-4, 10)]
+        [InlineData(4, -10)]
+        [InlineData(-4, -10)]
+        [InlineData(4, 10)]
+        public void FromFraction(int numerator, int denominator)
+        {
+            Real64 r = Real64.FromFraction(numerator, denominator);
+            var fraction = r.ToFraction();
+            Assert.True(r.IsFraction);
+            Assert.Equal(numerator, fraction.numerator);
+            Assert.Equal(denominator, fraction.denominator);
+        }
+
         [Fact]
         public void PositiveInfinity()
         {
@@ -175,6 +159,20 @@
             Assert.True(r1.IsInfinity);
             Assert.True(r1.IsNegativeInfinity);
             Assert.Equal(double.NegativeInfinity, r1.ToDouble());
+        }
+
+        [Fact]
+        public void SpecialPI()
+        {
+            Real64 r = Real64.PI;
+            Assert.Equal(Math.PI, r.ToDouble(), 12);
+        }
+
+        [Fact]
+        public void SpecialE()
+        {
+            Real64 r = Real64.E;
+            Assert.Equal(Math.E, r.ToDouble(), 12);
         }
     }
 }
