@@ -13,13 +13,22 @@
         public double Double;
     }
 
+    class SpecialNumbers
+    {
+        public string Symbol;
+        public ulong Decimal;
+    }
+
     [StructLayout(LayoutKind.Explicit, Size = 8)]
-    public readonly struct Real64 : IEquatable<Real64>, IComparable<Real64>, IRealNumber
+    public readonly partial struct Real64 : IEquatable<Real64>, IComparable<Real64>, IRealNumber
     {
         private delegate Real64 RealBinaryOperator(Real64 r1, Real64 r2);
 
         // Flags
         private const byte flagFraction =       0b_0100_0000;
+        private const byte flagFractionN =      0b_0101_0000;
+        private const byte flagFractionD =      0b_0110_0000;
+        private const byte flagFractionS =      0b_0111_0000;
         private const byte flagInteger =        0b_1111_1110;
         private const byte flagDecimal =        0b_1110_0000;
         private const byte flagRootNumbers =    0b_0010_0000;
@@ -28,12 +37,16 @@
         private const ulong specialPositiveInfinity = 0x00_00_00_00_00_00_02_10uL;
         private const ulong specialNegativeInfinity = 0x00_00_00_00_00_00_03_10uL;
         private const ulong specialNaN =              0x00_00_00_00_00_00_04_10uL;
-        private const ulong specialPI =               0x00_00_00_00_00_00_08_10uL;
-        private const ulong specialE =                0x00_00_00_00_00_00_09_10uL;
-        private const ulong specialPIDecimal =        0x1C_92_97_24_36_DA_F3_02uL;
-        private const ulong specialEDecimal =         0x18_B8_FE_3A_54_2F_F3_02uL;
+        private const ulong specialPI =               0x00_00_00_00_00_00_10_11uL;
+        private const ulong specialE =                0x00_00_00_00_00_00_20_11uL;
 
         private const ulong OffsetMask = 0x00_00_00_00_00_00_00_07uL;
+
+        private static readonly SpecialNumbers[] specialNumbers = new SpecialNumbers[] {
+            new SpecialNumbers{Symbol= "(nul)", Decimal = 0ul }, // offset 0
+            new SpecialNumbers{Symbol= "\u03C0", Decimal = 0x1C_92_97_24_36_DA_01_02ul },  
+            new SpecialNumbers{Symbol= "\u212f", Decimal = 0x18_B8_FE_3A_54_2F_01_02ul },
+        };
 
         private static readonly ulong[] offsetMasks = new ulong[8] {
             0x00_00_00_00_00_00_00_00uL,  // offset 0
@@ -86,17 +99,12 @@
 
         public bool IsFraction => (header & flagFraction) == flagFraction;
 
+        private bool IsSpecialDecimal => (header >> 4) == 1; 
+
         private static Real64 ConvertSpecialToDecimal(Real64 r)
         {
-            switch (r.unum)
-            {
-                case specialPI:
-                    return new Real64(specialPIDecimal);
-                case specialE:
-                    return new Real64(specialEDecimal);
-                default:
-                    throw new NotImplementedException("Unknown Special");
-            }
+            ulong specindex = r.unum >> 12;
+            return new Real64(specialNumbers[specindex].Decimal);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -188,618 +196,9 @@
         // and for the reverse:
         // int normal = fiveBits < 16 ? fiveBits : fiveBits | -32;
 
-        #region Addition Operations
-
-        private static RealBinaryOperator[] AddOperators = new RealBinaryOperator[] {
-            AddDecDec,
-            AddDecDecS,
-            AddDecSDecS,
-            AddDecRoot,
-            AddDecSRoot,
-            AddRootRoot,
-            AddDecRootS,
-            AddDecSRootS,
-            AddRootRootS,
-            AddRootSRootS,
-            AddDecFrac,
-            AddDecSFrac,
-            AddRootFrac,
-            AddRootSFrac,
-            AddFracFrac,
-            AddDecFracS,
-            AddDecSFracS,
-            AddRootFracS,
-            AddRootSFracS,
-            AddFracFracS,
-            AddFracSFracS,
-            AddDecFracNS,
-            AddDecSFracNS,
-            AddRootFracNS,
-            AddRootSFracNS,
-            AddFracFracNS,
-            AddFracSFracNS,
-            AddFracNSFracNS,
-            AddDecFracSS,
-            AddDecSFracSS,
-            AddRootFracSS,
-            AddRootSFracSS,
-            AddFracFracSS,
-            AddFracSFracSS,
-            AddFracNSFracSS,
-            AddFracSSFracSS
-        };
-
-        private static Real64 AddDecDec(Real64 r1, Real64 r2)
-        {
-            long result;
-            long expresult;
-            int resultOffset = 1;
-            (long d1mantissa, long d1exp) = r1.GetSegments();
-            (long d2mantissa, long d2exp) = r2.GetSegments();
-            if (d1exp == d2exp)
-            {
-                result = d1mantissa + d2mantissa;
-                expresult = d1exp;
-                resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
-            }
-            else
-            {
-                if (d2exp < d1exp)
-                {
-                    long difference = d1exp - d2exp;
-                    long g = d1mantissa * (long)Math.Pow(10, difference);
-                    result = g + d2mantissa;
-                    expresult = d1exp - difference;
-                }
-                else
-                {
-                    long difference = d2exp - d1exp;
-                    long g = d2mantissa * (long)Math.Pow(10, difference);
-                    result = g + d1mantissa;
-                    expresult = d2exp - difference;
-                }
-                resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
-            }
-            ulong final = ((ulong)result << (resultOffset * 8)) | ((uint)resultOffset & 0xF);
-
-            if (expresult != 0)
-            {
-                final |= ((ulong)expresult & offsetMasks[resultOffset]) << 8;
-            }
-            return new Real64(final);
-        }
-
-        private static Real64 AddDecDecS(Real64 r1, Real64 r2)
-        {
-            if (r2.IsNaN)
-            {
-                return Real64.NaN;
-            }
-
-            if (r2.IsInfinity)
-            {
-                return r2;
-            }
-
-            return AddDecDec(r1, ConvertSpecialToDecimal(r2));
-        }
-
-        private static Real64 AddDecRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        private static Real64 AddDecSDecS(Real64 r1, Real64 r2)
-        {
-            if (r1.IsPositiveInfinity)
-            {
-                return (r2.IsNegativeInfinity) ? new Real64(0ul) : r1;
-            }
-            if (r1.IsNegativeInfinity)
-            {
-                return (r2.IsPositiveInfinity) ? new Real64(0ul) : r1;
-            }
-            if (r2.IsPositiveInfinity)
-            {
-                return r2;
-            }
-            if (r2.IsNegativeInfinity)
-            {
-                return r2;
-            }
-            if (r1.IsNaN || r2.IsNaN)
-            {
-                return Real64.NaN;
-            }
-
-            // TODO: if sign is different and same special return 0;
-
-            return AddDecDec(ConvertSpecialToDecimal(r1), ConvertSpecialToDecimal(r2));
-        }
-
-        private static Real64 AddDecSRoot(Real64 r1, Real64 r2)
-        {
-            if (r1.IsNaN)
-            {
-                return Real64.NaN;
-            }
-
-            if (r1.IsInfinity)
-            {
-                return r1;
-            }
-
-            return AddDecRoot(ConvertSpecialToDecimal(r1), r2);
-        }
-        private static Real64 AddDecSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddDecSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddRootSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        private static Real64 AddFracFrac(Real64 r1, Real64 r2)
-        {
-            (long demoniator1, long numerator1) = r1.GetSegments();
-            (long demoniator2, long numerator2) = r2.GetSegments();
-            if (demoniator1 == demoniator2)
-            {
-                long finalnum = numerator1 + numerator2;
-                int offset = r1.GetOffset();
-                ulong offsetmask = offsetMasks[offset] << 8;
-                ulong h = (r1.unum & ~offsetmask) | (((ulong)finalnum << 8) & offsetmask);
-                return new Real64(h);
-            }
-            throw new NotImplementedException();
-        }
-
-        private static Real64 AddFracFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracNSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracNSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 AddFracSSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        #endregion
-
-        #region Subtraction Operations
-
-        private static RealBinaryOperator[] SubOperators = new RealBinaryOperator[] {
-            SubDecDec,
-            SubDecDecS,
-            SubDecSDecS,
-            SubDecRoot,
-            SubDecSRoot,
-            SubRootRoot,
-            SubDecRootS,
-            SubDecSRootS,
-            SubRootRootS,
-            SubRootSRootS,
-            SubDecFrac,
-            SubDecSFrac,
-            SubRootFrac,
-            SubRootSFrac,
-            SubFracFrac,
-            SubDecFracS,
-            SubDecSFracS,
-            SubRootFracS,
-            SubRootSFracS,
-            SubFracFracS,
-            SubFracSFracS,
-            SubDecFracNS,
-            SubDecSFracNS,
-            SubRootFracNS,
-            SubRootSFracNS,
-            SubFracFracNS,
-            SubFracSFracNS,
-            SubFracNSFracNS,
-            SubDecFracSS,
-            SubDecSFracSS,
-            SubRootFracSS,
-            SubRootSFracSS,
-            SubFracFracSS,
-            SubFracSFracSS,
-            SubFracNSFracSS,
-            SubFracSSFracSS
-        };
-
-        private static Real64 SubDecDec(Real64 r1, Real64 r2)
-        {
-            long result;
-            long expresult;
-            int resultOffset;
-            (long d1mantissa, long d1exp) = r1.GetSegments();
-            (long d2mantissa, long d2exp) = r2.GetSegments();
-            if (d1exp == d2exp)
-            {
-                result = d1mantissa - d2mantissa;
-                expresult = d1exp;
-                int sigbit2 = (result < 0) ? CountMinimumByteSegments((ulong)~result) : CountMinimumByteSegments((ulong)result);
-                resultOffset = Math.Max(sigbit2, 1);
-            }
-            else
-            {
-                result = 0;
-                expresult = 0;
-                resultOffset = 1;
-            }
-            ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
-
-            if (expresult != 0)
-            {
-                final |= (ulong)expresult;
-            }
-            return new Real64(final);
-        }
-
-        private static Real64 SubDecDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubDecSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubRootSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracFrac(Real64 r1, Real64 r2)
-        {
-            (long demoniator1, long numerator1) = r1.GetSegments();
-            (long demoniator2, long numerator2) = r2.GetSegments();
-            if (demoniator1 == demoniator2)
-            {
-                long finalnum = numerator1 - numerator2;
-                int offset = r1.GetOffset();
-                ulong offsetmask = offsetMasks[offset] << 8;
-                ulong h = (r1.unum & ~offsetmask) | (((ulong)finalnum << 8) & offsetmask);
-                return new Real64(h);
-            }
-            throw new NotImplementedException();
-        }
-
-        private static Real64 SubFracFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracNSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracNSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 SubFracSSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        #endregion
-
-        #region Multiply Operations
-
-        private static RealBinaryOperator[] MulOperators = new RealBinaryOperator[] {
-            MulDecDec,
-            MulDecDecS,
-            MulDecSDecS,
-            MulDecRoot,
-            MulDecSRoot,
-            MulRootRoot,
-            MulDecRootS,
-            MulDecSRootS,
-            MulRootRootS,
-            MulRootSRootS,
-            MulDecFrac,
-            MulDecSFrac,
-            MulRootFrac,
-            MulRootSFrac,
-            MulFracFrac,
-            MulDecFracS,
-            MulDecSFracS,
-            MulRootFracS,
-            MulRootSFracS,
-            MulFracFracS,
-            MulFracSFracS,
-            MulDecFracNS,
-            MulDecSFracNS,
-            MulRootFracNS,
-            MulRootSFracNS,
-            MulFracFracNS,
-            MulFracSFracNS,
-            MulFracNSFracNS,
-            MulDecFracSS,
-            MulDecSFracSS,
-            MulRootFracSS,
-            MulRootSFracSS,
-            MulFracFracSS,
-            MulFracSFracSS,
-            MulFracNSFracSS,
-            MulFracSSFracSS
-        };
-
-        private static Real64 MulDecDec(Real64 r1, Real64 r2)
-        {
-            long result;
-            long expresult;
-            int resultOffset = 1;
-            (long d1mantissa, long d1exp) = r1.GetSegments();
-            (long d2mantissa, long d2exp) = r2.GetSegments();
-
-            result = d1mantissa * d2mantissa;
-            expresult = d1exp + d2exp;
-            resultOffset += (expresult < 0) ? CountMinimumByteSegments((ulong)~expresult) : CountMinimumByteSegments((ulong)expresult);
-            ulong final = ((ulong)result << (resultOffset * 8)) | (uint)resultOffset;
-
-            if (expresult != 0)
-            {
-                ulong temp = ((ulong)expresult & offsetMasks[resultOffset]) << 8;
-                final |= ((ulong)expresult & offsetMasks[resultOffset]) << 8;
-            }
-            return new Real64(final);
-        }
-
-        private static Real64 MulDecDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulDecSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulRootSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracFrac(Real64 r1, Real64 r2)
-        {
-            (long demoniator1, long numerator1) = r1.GetSegments();
-            (long demoniator2, long numerator2) = r2.GetSegments();
-            long finaldenominator = demoniator1 * demoniator2;
-            long finalnumerator = numerator1 * numerator2;
-            int offset = 1 + ((finalnumerator < 0) ? CountMinimumByteSegments((ulong)~finalnumerator) : CountMinimumByteSegments((ulong)finalnumerator));
-            ulong h = ((ulong)finaldenominator << (8 * offset)) | ((ulong)finalnumerator << 8) | ((ulong)offset ^ flagFraction);
-            return new Real64(h);
-        }
-
-        private static Real64 MulFracFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracNSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracNSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 MulFracSSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        #endregion
-
-        #region Divide Operations
-
-        private static RealBinaryOperator[] DivOperators = new RealBinaryOperator[] {
-            DivDecDec,
-            DivDecDecS,
-            DivDecSDecS,
-            DivDecRoot,
-            DivDecSRoot,
-            DivRootRoot,
-            DivDecRootS,
-            DivDecSRootS,
-            DivRootRootS,
-            DivRootSRootS,
-            DivDecFrac,
-            DivDecSFrac,
-            DivRootFrac,
-            DivRootSFrac,
-            DivFracFrac,
-            DivDecFracS,
-            DivDecSFracS,
-            DivRootFracS,
-            DivRootSFracS,
-            DivFracFracS,
-            DivFracSFracS,
-            DivDecFracNS,
-            DivDecSFracNS,
-            DivRootFracNS,
-            DivRootSFracNS,
-            DivFracFracNS,
-            DivFracSFracNS,
-            DivFracNSFracNS,
-            DivDecFracSS,
-            DivDecSFracSS,
-            DivRootFracSS,
-            DivRootSFracSS,
-            DivFracFracSS,
-            DivFracSFracSS,
-            DivFracNSFracSS,
-            DivFracSSFracSS
-        };
-
-        private static Real64 DivDecDec(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSDecS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivDecSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootRoot(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootSRootS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootSFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivRootSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracFrac(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracSFracS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracNSFracNS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracNSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-        private static Real64 DivFracSSFracSS(Real64 r1, Real64 r2) => throw new NotImplementedException();
-
-        #endregion
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Real64 IntegerAdd(in Real64 r1, in Real64 r2)
-        {
-            long result = (long)r1.unum + (long)r2.unum;
-            result = result ^ 3u;
-            return new Real64((ulong)result);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Real64 IntegerSub(in Real64 r1, in Real64 r2)
-        {
-            long result = ((long)r1.unum >> 8) - ((long)r2.unum >> 8);
-            result = (result << 8) ^ 1u;
-            return new Real64((ulong)result);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
-        {
-            long result = ((long)r1.unum >> 8) * ((long)r2.unum >> 8);
-            result = (result << 8) ^ 1u;
-            return new Real64((ulong)result);
-        }
-
         private static int Pairing(int max, int min)
         {
             return ((max * (max + 1)) / 2) + min;
-        }
-
-        public static Real64 operator +(Real64 r1, Real64 r2)
-        {
-            if (r1.IsInteger && r2.IsInteger)
-            {
-                return IntegerAdd(r1, r2);
-            }
-
-            int r1header = r1.header >> 4;
-            int r2header = r2.header >> 4;
-            if (r1header > r2header)
-            {
-                RealBinaryOperator op = AddOperators[Pairing(r1header, r2header)];
-                return op(r2, r1);
-            }
-            else
-            {
-                RealBinaryOperator op = AddOperators[Pairing(r2header, r1header)];
-                return op(r1, r2);
-            }
-        }
-
-        public static Real64 operator -(Real64 r1, Real64 r2)
-        {
-            if (r1.IsInteger && r2.IsInteger)
-            {
-                return IntegerSub(r1, r2);
-            }
-
-            int r1header = r1.header >> 4;
-            int r2header = r2.header >> 4;
-            if (r1header > r2header)
-            {
-                RealBinaryOperator op = SubOperators[Pairing(r1header, r2header)];
-                return op(r2, r1);
-            }
-            else
-            {
-                RealBinaryOperator op = SubOperators[Pairing(r2header, r1header)];
-                return op(r1, r2);
-            }
-        }
-
-        public static Real64 operator *(Real64 r1, Real64 r2)
-        {
-            if (r1.IsInteger && r2.IsInteger)
-            {
-                return IntegerMul(r1, r2);
-            }
-
-            int r1header = r1.header >> 4;
-            int r2header = r2.header >> 4;
-            if (r1header > r2header)
-            {
-                RealBinaryOperator op = MulOperators[Pairing(r1header, r2header)];
-                return op(r2, r1);
-            }
-            else
-            {
-                RealBinaryOperator op = MulOperators[Pairing(r2header, r1header)];
-                return op(r1, r2);
-            }
-        }
-
-        public static Real64 operator /(Real64 r1, Real64 r2)
-        {
-            if (r1.IsInteger && r2.IsInteger)
-            {
-               // return IntegerDiv(r1, r2);
-            }
-
-            int r1header = r1.header >> 4;
-            int r2header = r2.header >> 4;
-            if (r1header > r2header)
-            {
-                RealBinaryOperator op = DivOperators[Pairing(r1header, r2header)];
-                return op(r2, r1);
-            }
-            else
-            {
-                RealBinaryOperator op = DivOperators[Pairing(r2header, r1header)];
-                return op(r1, r2);
-            }
         }
 
         public static unsafe long DoubleToInt64Bits(double value)
@@ -961,16 +360,62 @@
             return signBit | (exponent << 23) | (mantissa & 0x7fffff);
         }
 
+        private static readonly ulong[] PowersOf10 = new ulong[20] 
+            {1, 10, 100, 1000, 10000, 100000,
+                 1000000, 10000000, 100000000, 1000000000,
+                10000000000, 100000000000, 1000000000000,
+                10000000000000, 100000000000000, 1000000000000000,
+                10000000000000000, 100000000000000000, 1000000000000000000,
+                10000000000000000000
+            };
+
+        private static readonly int[] MultiplyDeBruijnBitPosition2 = new int[64] {
+                0, // change to 1 if you want bitSize(0) = 1
+                1,  2, 53,  3,  7, 54, 27, 4, 38, 41,  8, 34, 55, 48, 28,
+                62,  5, 39, 46, 44, 42, 22,  9, 24, 35, 59, 56, 49, 18, 29, 11,
+                63, 52,  6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+                51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12
+            }; // table taken from http://chessprogramming.wikispaces.com/De+Bruijn+Sequence+Generator
+
+        private static readonly ulong multiplicator = 0x022fdd63cc95386dUL;
+
+        private static int IntegerLogBase2(ulong v)
+        {
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v |= v >> 32;
+            // at this point you could also use popcount to find the number of set bits.
+            // That might well be faster than a lookup table because you prevent a 
+            // potential cache miss
+            if (v == unchecked((ulong)-1)) return 64;
+            v++;
+            return MultiplyDeBruijnBitPosition2[(ulong)(v * multiplicator) >> 58];
+        }
+
+        private static int CountDigits(ulong v)
+        {
+            int t = (IntegerLogBase2(v) + 1) * 1233 >> 12;
+            return 1 + t - ((v < PowersOf10[t]) ? 1 : 0);
+        }
+
+        private static int CountDigits(long v)
+        {
+            return (v < 0) ? CountDigits((ulong)(-v)) : CountDigits((ulong)v);
+        }
+
         public static Real64 FromDecimal(decimal num)
         {
             const int SignMask = unchecked((int)0x80000000);
+
+            num = decimal.Round(num, 18);
             int[] dparts = decimal.GetBits(num);
             // lo, mid, hi (number) +  flags with scale power 10
-            if (dparts[2] > 0)
-            {
-                throw new OverflowException();
-            }
+
             ulong h = (uint)dparts[0] | ((ulong)dparts[1] << 32);
+            int hdigits = CountDigits(h);
 
             int f = dparts[3];
             if ((f & SignMask) != 0)
@@ -979,8 +424,13 @@
             }
 
             f = (f & ~SignMask) >> 16;
-            f = -f & 0xFF;
 
+            decimal positivenum = num < 0 ? decimal.Negate(num) : num;
+            int c = CountDigits((ulong)(int)positivenum);
+
+            f = (f > 0) ? hdigits - f : c;
+            //f = (f > 0 && c == 0) ? -(f-1) : c; // -f & 0xFF;
+            f = f & 0xFF;
             h = h << 16 | ((ulong)f << 8) | 2ul;
             return new Real64(h);
         }
@@ -1000,17 +450,41 @@
         {
             if (IsFraction)
             {
-                (long demoniator, long numerator) = GetSegments();
-                decimal d = new decimal(numerator) / new decimal(demoniator);
+                (long denominator, long numerator) = GetSegments();
+                decimal dnum, dnum2;
+
+                //TODO: add in support for specials
+                if ((header & flagFractionN) == flagFractionN) // numerator
+                {
+                    numerator = numerator >> 4;
+                    Real64 temp = new Real64(specialNumbers[numerator].Decimal);
+                    dnum = temp.ToDecimal();
+                }
+                else
+                {
+                    dnum = new decimal(numerator);
+                }
+
+                if ((header & flagFractionD) == flagFractionD) // denominator
+                {
+                    denominator = denominator >> 4;
+                    Real64 temp = new Real64(specialNumbers[denominator].Decimal);
+                    dnum2 = temp.ToDecimal();
+                }
+                else
+                {
+                    dnum2 = new decimal(denominator);
+                }
+
+
+
+                decimal d = dnum / dnum2;
                 return d;
             }
 
-            switch (this.unum)
+            if (IsSpecialDecimal)
             {
-                case specialPI:
-                    return (new Real64(specialPIDecimal)).ToDecimal();
-                case specialE:
-                    return (new Real64(specialEDecimal)).ToDecimal();
+                return (ConvertSpecialToDecimal(this)).ToDecimal();
             }
 
             (long mantissa, long exp) = GetSegments();
@@ -1020,19 +494,107 @@
                 mantissa = -mantissa;
                 negative = true;
             }
+            int c = CountDigits((ulong)mantissa);
             if (exp < 0)
             {
-                exp = -exp;
+                exp = -exp + c;
             }
             else
             {
                 //mantissa = mantissa * Pow(exp);
+
+                exp = c - exp;
+                if (exp < 0)
+                    exp = 0;
             }
 
             int low = (int)mantissa;
             int mid = (int)(mantissa >> 32);
             return new Decimal(low, mid, 0, negative, (byte)exp);
         }
+
+        public static Real64 FromFraction(int numerator, Real64 denominator)
+        {
+            if (denominator.IsInteger)
+            {
+                return FromFraction(numerator, denominator.ToInteger());
+            }
+
+            if (denominator.IsSpecialDecimal)
+            {
+                long part2 = numerator;
+                int sigbit2 = (part2 < 0) ? CountLeadingZeros((ulong)~part2) / 8 : CountLeadingZeros((ulong)part2) / 8;
+                int numeratorOffset = Math.Max(8 - sigbit2, 2);
+                part2 = (long)((ulong)part2 & offsetMasks[numeratorOffset]);
+                long part1 = denominator.GetSegmentOne();
+                int sigbit1 = (part1 < 0) ? CountLeadingZeros((ulong)~part1) / 8 : CountLeadingZeros((ulong)part1) / 8;
+
+                //TODO: check if demoninator will fit
+                ulong h = ((ulong)part1 << (numeratorOffset * 8)) | ((ulong)(uint)part2 << 8) | ((ulong)numeratorOffset | flagFractionD);
+                return new Real64(h);
+
+            }
+
+            if (denominator.IsFraction)
+            {
+                throw new NotSupportedException("Cannot create a fraction from a fraction");
+            }
+
+            throw new NotSupportedException("Can only create a fraction from integers or specials");
+        }
+
+        public static Real64 FromFraction(Real64 numerator, int denominator)
+        {
+            if (numerator.IsInteger)
+            {
+                return FromFraction(numerator.ToInteger(), denominator);
+            }
+
+            if (numerator.IsSpecialDecimal)
+            {
+                long part2 = numerator.GetSegmentOne();
+                int sigbit2 = (part2 < 0) ? CountLeadingZeros((ulong)~part2) / 8 : CountLeadingZeros((ulong)part2) / 8;
+                int numeratorOffset = Math.Max(8 - sigbit2, 2);
+                part2 = (long)((ulong)part2 & offsetMasks[numeratorOffset]);
+                long part1 = denominator;
+                int sigbit1 = (part1 < 0) ? CountLeadingZeros((ulong)~part1) / 8 : CountLeadingZeros((ulong)part1) / 8;
+
+                //TODO: check if demoninator will fit
+                ulong h = ((ulong)part1 << (numeratorOffset * 8)) | ((ulong)(uint)part2 << 8) | ((ulong)numeratorOffset | flagFractionN);
+                return new Real64(h);
+
+            }
+
+            if (numerator.IsFraction)
+            {
+                throw new NotSupportedException("Cannot create a fraction from a fraction");
+            }
+
+            throw new NotSupportedException("Can only create a fraction from integers or specials");
+        }
+
+        public static Real64 FromFraction(Real64 numerator, Real64 denominator)
+        {
+            if (denominator.IsInteger)
+            {
+                return FromFraction(numerator, denominator.ToInteger());
+            }
+            if (numerator.IsInteger)
+            {
+                return FromFraction(numerator.ToInteger(), denominator);
+            }
+
+            if (denominator.IsSpecialDecimal && numerator.IsSpecialDecimal)
+            {
+                long part2 = numerator.GetSegmentOne();
+                long part1 = denominator.GetSegmentOne();
+                ulong h = ((ulong)part1 << 16) | ((ulong)part2 << 8) | ((ulong)2 | flagFractionS);
+                return new Real64(h);
+            }
+
+            throw new NotSupportedException("Can only create a fraction from integers or specials");
+        }
+
 
         public static Real64 FromFraction(int numerator, int denominator)
         {
@@ -1092,12 +654,6 @@
         public int CompareTo(Real64 other)
         {
             throw new NotImplementedException();
-        }
-
-        public Real64 Sqrt()
-        {
-            ulong h = this.unum | flagRootNumbers;
-            return new Real64(h);
         }
     }
 }

@@ -29,6 +29,12 @@
         [InlineData(0.01d, 0.001d, 0.00001d)]
         [InlineData(5.1d, 4.3d, 21.93d)]
         [InlineData(0.9d, 3.9d, 3.51d)]
+        [InlineData(20d, 20d, 400d)]
+        [InlineData(2.695d, 3.2547d, 8.7714165d)]
+        [InlineData(2.695d, 13.2547d, 35.7214165d)]
+        [InlineData(52.695d, 73.2547d, 3860.1564165d)]
+        [InlineData(5.662222d, 2d, 11.324444d)]
+        [InlineData(0.121d, 0.121d, 0.014641d)]
         public void DecimalMultiplication(double num1, double num2, double expected)
         {
             Real64 r1 = Real64.FromDouble(num1);
@@ -105,8 +111,10 @@
         [InlineData(0)]
         [InlineData(-1)]
         [InlineData(-10097)]
-        [InlineData(0.5)]
+        [InlineData(1.5)]
         [InlineData(50)]
+        [InlineData(0.002)]
+        [InlineData(0.121)]
         public void FromDecimal(decimal num)
         {
             Real64 r = (Real64)num;
@@ -173,6 +181,14 @@
         {
             Real64 r = Real64.E;
             Assert.Equal(Math.E, r.ToDouble(), 12);
+        }
+
+        [Fact]
+        public void FracSEPI()
+        {
+            Real64 r1 = Real64.FromFraction(Real64.E, Real64.PI);
+            Assert.True(r1.IsFraction);
+            Assert.Equal(Math.E / Math.PI, r1.ToDouble(), 12);
         }
     }
 }
