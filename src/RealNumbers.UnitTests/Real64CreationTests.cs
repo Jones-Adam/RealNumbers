@@ -151,6 +151,18 @@
             Assert.Equal(denominator, fraction.denominator);
         }
 
+        [Theory]
+        [InlineData(4)]
+        public void FromFractionSpecial(int numerator)
+        {
+            Real64 r1 = Real64.FromFraction(numerator, Real64.PI);
+            var fraction = r1.ToFraction();
+            Assert.True(r1.IsFraction);
+            Assert.Equal(numerator, fraction.numerator);
+            var d = r1.ToDouble();
+            Assert.Equal( 4 / Math.PI, d, 12);
+        }
+
         [Fact]
         public void PositiveInfinity()
         {

@@ -24,6 +24,19 @@
         }
 
         [Theory]
+        [InlineData(6, 0.2d, 6.2d)]
+        [InlineData(10, 0.01d, 10.01d)]
+        [InlineData(4, 3.1d, 7.1d)]
+        [InlineData(16, 0.121d, 16.121d)]
+        public void AddIntDec(int num1, double num2, double expected)
+        {
+            Real64 r1 = (Real64)num1;
+            Real64 r2 = (Real64)num2;
+            Real64 radd = r1 + r2;
+            Assert.Equal(expected, radd.ToDouble(), 12);
+        }
+
+        [Theory]
         [InlineData(0.2d, 0.2d, 0.4d)]
         [InlineData(0.1d, 0.01d, 0.11d)]
         [InlineData(0.01d, 0.1d, 0.11d)]
@@ -71,38 +84,39 @@
         public void AddDecRoot(double num1, int root, int num2)
         {
             Real64 r1 = (Real64)num1;
-            Real64 r2 = default; // from root num2;
+            Real64 r2 = ((Real64)num2).NthRoot(root);
             Real64 radd = r1 + r2;
             Assert.Equal(Math.Pow(num2, -root) + num1, radd.ToDouble(), 12);
         }
 
-        [Fact(Skip = "Not Implemented")]
-        public void AddDecSRoot()
+        [Theory(Skip = "Not Implemented")]
+        [InlineData(2, 4)]
+        public void AddDecSRoot(int root, int num)
         {
             Real64 r1 = Real64.PI;
-            Real64 r2 = default; // root
+            Real64 r2 = ((Real64)num).NthRoot(root);
             Real64 radd = r1 + r2;
             Assert.Equal(Math.PI + Math.Sqrt(2), radd.ToDouble(), 12);
         }
 
         [Theory(Skip = "Not Implemented")]
-        [InlineData(9, 4, 5)]
-        public void AddRootRoot(int num1, int num2, double expected)
+        [InlineData(9, 4, 2, 2, 5)]
+        public void AddRootRoot(int num1, int num2, int root1, int root2, double expected)
         {
-            Real64 r1 = default; // from root
-            Real64 r2 = default; // from root
+            Real64 r1 = ((Real64)num1).NthRoot(root1);
+            Real64 r2 = ((Real64)num2).NthRoot(root2);
             Real64 radd = r1 + r2;
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
         [Theory(Skip = "Not Implemented")]
-        [InlineData(0.2d)]
-        public void AddDecRootS(double num1)
+        [InlineData(0.2d, 2)]
+        public void AddDecRootS(double num1, int root)
         {
             Real64 r1 = (Real64)num1;
-            Real64 r2 = Real64.PI.Sqrt();
+            Real64 r2 = Real64.PI.NthRoot(root);
             Real64 radd = r1 + r2;
-            Assert.Equal(Math.Sqrt(Math.PI) + num1, radd.ToDouble(), 12);
+            Assert.Equal(Math.Pow(Math.PI, 1 / root) + num1, radd.ToDouble(), 12);
         }
 
         [Fact(Skip = "Not Implemented")]
@@ -115,10 +129,10 @@
         }
 
         [Theory(Skip = "Not Implemented")]
-        [InlineData(0.2d, 0.2d)]
+        [InlineData(2, 4)]
         public void AddRootRootS(int root, int num1)
         {
-            Real64 r1 = (Real64)num1;
+            Real64 r1 = ((Real64)num1).NthRoot(root);
             Real64 r2 = Real64.E.Sqrt();
             Real64 radd = r1 + r2;
             double expected = Math.Pow(num1, -root) + Math.Sqrt(Math.E);
@@ -158,7 +172,7 @@
         [InlineData(2, 4, 4, 2, 4)]
         public void AddRootFrac(int root, int root2, int num, int denom, double expected)
         {
-            Real64 r1 = default; //from root
+            Real64 r1 = ((Real64)root2).NthRoot(root);
             Real64 r2 = Real64.FromFraction(num, denom);
             Real64 radd = r1 + r2;
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -187,50 +201,50 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(0.2d, 0.2d)]
-        public void AddDecFracS(double num1, int denom)
+        public void AddDecFracN(double num1, int denom)
         {
             Real64 r1 = (Real64)num1;
-            Real64 r2 = default; // pi / denom
+            Real64 r2 = Real64.FromFraction(Real64.PI, denom);
             Real64 radd = r1 + r2;
             double expected = num1 + Math.PI / denom;
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
         [Fact(Skip = "Not Implemented")]
-        public void AddDecSFracS()
+        public void AddDecSFracN()
         {
             Real64 r1 = Real64.PI;
-            Real64 r2 = default; // pi / 2
+            Real64 r2 = Real64.FromFraction(Real64.PI, 2);
             Real64 radd = r1 + r2;
             Assert.Equal(Math.PI + Math.PI / 2, radd.ToDouble(), 12);
         }
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(2, 4, 2)]
-        public void AddRootFracS(int root, int root2, int denom)
+        public void AddRootFracN(int root, int root2, int denom)
         {
-            Real64 r1 = default; // root
-            Real64 r2 = default; // pi / denom
+            Real64 r1 = ((Real64)root2).NthRoot(root);
+            Real64 r2 = Real64.FromFraction(Real64.PI, denom);
             Real64 radd = r1 + r2;
             Assert.Equal(Math.Pow(root2, 1/root) + Math.PI / denom, radd.ToDouble(), 12);
         }
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(2)]
-        public void AddRootSFracS(int num)
+        public void AddRootSFracN(int num)
         {
             Real64 r1 = Real64.PI.Sqrt();
-            Real64 r2 = default;
+            Real64 r2 = Real64.FromFraction(Real64.PI, num);
             Real64 radd = r1 + r2;
             Assert.Equal(Math.Sqrt(Math.PI) + Math.PI / num, radd.ToDouble(), 12);
         }
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(1, 2, 2)]
-        public void AddFracFracS(int n1, int d1, int d2)
+        public void AddFracFracN(int n1, int d1, int d2)
         {
             Real64 r1 = Real64.FromFraction(n1, d1);
-            Real64 r2 = default; // pi / d2
+            Real64 r2 = Real64.FromFraction(Real64.PI, d2);
             Real64 radd = r1 + r2;
             double expected = (n1 / d1) + (Math.PI / d2);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -238,10 +252,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(2, 2)]
-        public void AddFracSFracS(int d1, int d2)
+        public void AddFracNFracN(int d1, int d2)
         {
-            Real64 r1 = default; //  (Real64)num1;
-            Real64 r2 = default; // (Real64)num2;
+            Real64 r1 = Real64.FromFraction(Real64.PI, d1);
+            Real64 r2 = Real64.FromFraction(Real64.PI, d2);
             Real64 radd = r1 + r2;
             double expected = (Math.PI / d1) + (Math.PI / d2);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -249,10 +263,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(0.2d, 4)]
-        public void AddDecFracNS(double num1, int n1)
+        public void AddDecFracD(double num1, int n1)
         {
             Real64 r1 = (Real64)num1;
-            Real64 r2 = default; // n1 / pi
+            Real64 r2 = Real64.FromFraction(n1, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = num1 + (n1 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -260,10 +274,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(4)]
-        public void AddDecSFracNS(int n1)
+        public void AddDecSFracD(int n1)
         {
             Real64 r1 = Real64.E;
-            Real64 r2 = default; // n1 / pi
+            Real64 r2 = Real64.FromFraction(n1, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.E + (n1 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -271,10 +285,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(2, 4, 4)]
-        public void AddRootFracNS(int root, int root2, int n1)
+        public void AddRootFracD(int root, int root2, int n1)
         {
-            Real64 r1 = default; // from root
-            Real64 r2 = default; // n1 / pi
+            Real64 r1 = ((Real64)root2).NthRoot(root);
+            Real64 r2 = Real64.FromFraction(n1, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.Pow(root2, 1 / root) + (n1 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -282,10 +296,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(4)]
-        public void AddRootSFracNS(int n1)
+        public void AddRootSFracD(int n1)
         {
-            Real64 r1 = default; // from root e
-            Real64 r2 = default; // n1 / pi
+            Real64 r1 = Real64.E.Sqrt();
+            Real64 r2 = Real64.FromFraction(n1, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.Sqrt(Math.E) + (n1 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -293,31 +307,32 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(1, 2, 2)]
-        public void AddFracFracNS(int n1, int d1, int n2)
+        public void AddFracFracD(int n1, int d1, int n2)
         {
             Real64 r1 = Real64.FromFraction(n1, d1);
-            Real64 r2 = default; // (Real64)num2;
+            Real64 r2 = Real64.FromFraction(n2, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = (n1 / d1) + (n2 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
-        [Fact(Skip = "Not Implemented")]
-        public void AddFracSFracNS()
+        [Theory(Skip = "Not Implemented")]
+        [InlineData(1, 2)]
+        public void AddFracNFracD(int n1, int d1)
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.FromFraction(Real64.PI, d1);
+            Real64 r2 = Real64.FromFraction(n1, Real64.PI);
             Real64 radd = r1 + r2;
-            double expected = (Math.PI / 2) + (2 / Math.PI);
+            double expected = (Math.PI / d1) + (n1 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
-        [Theory(Skip = "Not Implemented")]
+        [Theory]
         [InlineData(1, 2)]
-        public void AddFracNSFracNS(int num1, int num2)
+        public void AddFracDFracD(int num1, int num2)
         {
-            Real64 r1 = default; // Real64.FromFraction(num1, pi)
-            Real64 r2 = default; // Real64.FromFraction(num2, pi)
+            Real64 r1 = Real64.FromFraction(num1, Real64.PI);
+            Real64 r2 = Real64.FromFraction(num2, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = (num1 / Math.PI) + (num2 / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -325,20 +340,20 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(0.2d)]
-        public void AddDecFracSS(double num1)
+        public void AddDecFracS(double num1)
         {
             Real64 r1 = (Real64)num1;
-            Real64 r2 = default; // 
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = num1 + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
         [Fact(Skip = "Not Implemented")]
-        public void AddDecSFracSS()
+        public void AddDecSFracS()
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.E;
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.E + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -346,20 +361,20 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(2, 4)]
-        public void AddRootFracSS(int root, int root2)
+        public void AddRootFracS(int root, int root2)
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = ((Real64)root2).NthRoot(root);
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.Pow(root2, 1 / root) + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
         [Fact(Skip = "Not Implemented")]
-        public void AddRootSFracSS()
+        public void AddRootSFracS()
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.PI.Sqrt();
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.Sqrt(Math.PI) + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -367,10 +382,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(1, 2)]
-        public void AddFracFracSS(int num, int demon)
+        public void AddFracFracS(int num, int demon)
         {
             Real64 r1 = Real64.FromFraction(num, demon);
-            Real64 r2 = default;
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = (num/demon) + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -378,10 +393,10 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(4)]
-        public void AddFracSFracSS(int num1)
+        public void AddFracNFracS(int num1)
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.FromFraction(Real64.PI, num1);
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.PI / num1 + Math.PI / Math.PI;
             Assert.Equal(expected, radd.ToDouble(), 12);
@@ -389,20 +404,21 @@
 
         [Theory(Skip = "Not Implemented")]
         [InlineData(4)]
-        public void AddFracNSFracSS(int num1)
+        public void AddFracDFracS(int num1)
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.FromFraction(num1, Real64.PI);
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
+            Assert.Equal(1d, r2.ToDouble(), 12);
             Real64 radd = r1 + r2;
-            double expected = num1 / Math.PI + Math.PI / Math.PI;
+            double expected = (num1 / Math.PI) + (Math.PI / Math.PI);
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
         [Fact(Skip = "Not Implemented")]
-        public void AddFracSSFracSS()
+        public void AddFracSFracS()
         {
-            Real64 r1 = default;
-            Real64 r2 = default;
+            Real64 r1 = Real64.FromFraction(Real64.E, Real64.PI);
+            Real64 r2 = Real64.FromFraction(Real64.PI, Real64.PI);
             Real64 radd = r1 + r2;
             double expected = Math.E / Math.PI + Math.PI / Math.PI;
             Assert.Equal(expected, radd.ToDouble(), 12);

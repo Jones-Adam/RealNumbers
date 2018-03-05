@@ -22,7 +22,7 @@
     [StructLayout(LayoutKind.Explicit, Size = 8)]
     public readonly partial struct Real64 : IEquatable<Real64>, IComparable<Real64>, IRealNumber
     {
-        private delegate Real64 RealBinaryOperator(Real64 r1, Real64 r2);
+        private delegate Real64 RealBinaryOperator(in Real64 r1, in Real64 r2);
 
         // Flags
         private const byte flagFraction =       0b_0100_0000;
@@ -44,8 +44,8 @@
 
         private static readonly SpecialNumbers[] specialNumbers = new SpecialNumbers[] {
             new SpecialNumbers{Symbol= "(nul)", Decimal = 0ul }, // offset 0
-            new SpecialNumbers{Symbol= "\u03C0", Decimal = 0x1C_92_97_24_36_DA_01_02ul },  
-            new SpecialNumbers{Symbol= "\u212f", Decimal = 0x18_B8_FE_3A_54_2F_01_02ul },
+            new SpecialNumbers{Symbol= "\u03C0", Decimal = 0x1C_92_97_24_36_DA_F4_02ul },  // 3.1415926535898
+            new SpecialNumbers{Symbol= "\u212f", Decimal = 0x18_B8_FE_3A_54_2F_F4_02ul },  // 2.7182818284591
         };
 
         private static readonly ulong[] offsetMasks = new ulong[8] {
@@ -119,7 +119,7 @@
             long p1 = (long)this.unum >> (offset << 3);
             if (offset == 1)
             {
-                return (p1, 0);
+                return (p1, 1);
             }
 
             ulong p2 = (this.unum >> 8) & offsetMasks[offset];
@@ -425,10 +425,12 @@
 
             f = (f & ~SignMask) >> 16;
 
+            f = -(f - 1);
+
             decimal positivenum = num < 0 ? decimal.Negate(num) : num;
             int c = CountDigits((ulong)(int)positivenum);
 
-            f = (f > 0) ? hdigits - f : c;
+            //f = (f > 0) ? hdigits - f : c;
             //f = (f > 0 && c == 0) ? -(f-1) : c; // -f & 0xFF;
             f = f & 0xFF;
             h = h << 16 | ((ulong)f << 8) | 2ul;
@@ -495,6 +497,8 @@
                 negative = true;
             }
             int c = CountDigits((ulong)mantissa);
+            exp = -(exp - 1);
+            /*
             if (exp < 0)
             {
                 exp = -exp + c;
@@ -507,6 +511,7 @@
                 if (exp < 0)
                     exp = 0;
             }
+            */
 
             int low = (int)mantissa;
             int mid = (int)(mantissa >> 32);
