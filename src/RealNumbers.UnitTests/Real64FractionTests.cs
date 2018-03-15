@@ -2,7 +2,7 @@
 {
     using System;
     using Xunit;
-
+    /*
     public class Real64FractionTests
     { 
         [Theory]
@@ -25,4 +25,5 @@
             Assert.Equal(new decimal(result), res.ToDecimal());
         }
     }
+    */
 }

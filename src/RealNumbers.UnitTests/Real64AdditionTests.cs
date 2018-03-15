@@ -50,6 +50,7 @@
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
+        /*
         [Theory]
         [InlineData(0.2d, Math.PI + 0.2)]
         public void AddDecDecSPI(double num1, double expected)
@@ -148,7 +149,7 @@
             Assert.Equal(Math.Sqrt(Math.PI) + Math.Sqrt(Math.E), radd.ToDouble(), 12);
         }
 
-        [Theory(Skip = "Not Implemented")]
+        [Theory]
         [InlineData(0.2d, 1, 5, 0.4d)]
         public void AddDecFrac(double d, int num, int denom, double expected)
         {
@@ -168,7 +169,7 @@
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
 
-        [Theory(Skip = "Not Implemented")]
+        [Theory]
         [InlineData(2, 4, 4, 2, 4)]
         public void AddRootFrac(int root, int root2, int num, int denom, double expected)
         {
@@ -423,5 +424,6 @@
             double expected = Math.E / Math.PI + Math.PI / Math.PI;
             Assert.Equal(expected, radd.ToDouble(), 12);
         }
+            */
     }
 }

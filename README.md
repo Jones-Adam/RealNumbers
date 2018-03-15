@@ -16,9 +16,9 @@ To manually build the library from source you can use Visual Studio or using dot
 
 ## Using the library
 
-There will be 3 types provided publically.
+There will be 4 types provided publically.
 
-Real64, Real128 and Real256 and an interface IRealNumber (to allow generic code to perform arithmetic operations on arbitary types).
+Real32, Real64, Real128 and Real256 and an interface IRealNumber (to allow generic code to perform arithmetic operations on arbitary types).
 
 The Real types can be used in substitute for any native number type on the .net platform and can be easily converted between them.
 
