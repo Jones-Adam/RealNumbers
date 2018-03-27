@@ -109,31 +109,41 @@
 
         [Theory]
         [InlineData(4)]
-        public void FromFractionSpecial(int numerator)
+        public void FromFractionSpecialDenominator(int numerator)
         {
             Real64 r1 = Real64.FromFraction(numerator, Real64.PI);
             var fraction = r1.ToFraction();
             Assert.True(r1.IsFraction);
             Assert.Equal(numerator, fraction.numerator);
             var d = r1.ToDouble();
-            Assert.Equal( 4 / Math.PI, d, 12);
+            Assert.Equal(numerator / Math.PI, d, 12);
         }
 
-        /*        
+        [Theory]
+        [InlineData(4)]
+        public void FromFractionSpecialNumerator(int denominator)
+        {
+            Real64 r1 = Real64.FromFraction(Real64.PI, denominator);
+            var fraction = r1.ToFraction();
+            Assert.True(r1.IsFraction);
+            Assert.Equal(denominator, fraction.denominator);
+            var d = r1.ToDouble();
+            Assert.Equal(Math.PI / denominator, d, 12);
+        }
+     
         [Theory]
         [InlineData(2)]
         [InlineData(4)]
-        [InlineData(-1)]
         [InlineData(0)]
-        [InlineData(0.7)]
-        [InlineData(51.112)]
-        public void FromSqrt(double root)
+        public void FromSqrt(int radical)
         {
-            Real64 r1 = ((Real64)root).Sqrt();
-            Assert.True(r1.IsDecimal);
+            Real64 r1 = Real64.FromRadical(2, radical);
+            Assert.False(r1.IsDecimal);
             var d = r1.ToDouble();
-            Assert.Equal(Math.Sqrt(root), d, 12);
+            Assert.Equal(Math.Sqrt(radical), d, 12);
         }
+
+        /*
 
         [Fact]
         public void PositiveInfinity()
@@ -166,6 +176,20 @@
         {
             Real64 r = Real64.E;
             Assert.Equal(Math.E, r.ToDouble(), 12);
+        }
+
+        [Fact]
+        public void SpecialESqrt()
+        {
+            Real64 r = Real64.E.Sqrt();
+            Assert.Equal(Math.Sqrt(Math.E), r.ToDouble(), 12);
+        }
+
+        [Fact]
+        public void SpecialPISqrt()
+        {
+            Real64 r = Real64.PI.Sqrt();
+            Assert.Equal(Math.Sqrt(Math.PI), r.ToDouble(), 12);
         }
 
         [Fact]

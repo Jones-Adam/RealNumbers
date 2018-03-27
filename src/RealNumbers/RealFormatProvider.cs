@@ -30,26 +30,47 @@ namespace System
         {
             if (arg is Real64 number)
             {
-                string fmtString = string.Empty;
-                if (format.Length > 1)
+                Real64 num = (Real64)arg;
+                if (format.Substring(0, 1).Equals("G", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (int.TryParse(format.Substring(1), out int precision))
-                    {
-                        fmtString = "N" + precision.ToString();
-                    }
-                    else
-                    {
-                        fmtString = format.Substring(1);
-                    }
+                    //General Format
+                    return num.ToGeneralString(format, provider);
                 }
-
-                if (format.Substring(0, 1).Equals("D", StringComparison.OrdinalIgnoreCase))
+                else if (format.Substring(0, 1).Equals("C", StringComparison.OrdinalIgnoreCase))
                 {
-                    return "A number";
+                    return "Currency Format";
+                }
+                else if (format.Substring(0, 1).Equals("D", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Decimal Format";              
+                }
+                else if (format.Substring(0, 1).Equals("E", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Scientific Format";
+                }
+                else if (format.Substring(0, 1).Equals("F", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Fixed point Format";
+                }
+                else if (format.Substring(0, 1).Equals("N", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Number Format";
+                }
+                else if (format.Substring(0, 1).Equals("P", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Percent Format";
+                }
+                else if (format.Substring(0, 1).Equals("R", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "RoundTrip Format";
+                }
+                else if (format.Substring(0, 1).Equals("P", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Hexadecimal Format";
                 }
                 else
                 {
-                    return "";
+                    throw new FormatException("Unknown Format qualifier");
                 }
             }
             else

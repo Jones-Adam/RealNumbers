@@ -515,8 +515,7 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
 
                     int resultOffset = Math.Max(offsetr1, offsetr2);
 
-                    ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
-                    return new Real64(final);
+                    return CreateDecimal((ulong)result, (ulong)expresult, resultOffset);
                 }
                 else
                 {
@@ -531,8 +530,7 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
 
                     int resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)-expresult) : CountMinimumByteSegments((ulong)expresult);
 
-                    ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
-                    return new Real64(final);
+                    return CreateDecimal((ulong)result, (ulong)expresult, resultOffset);
                 }
             }
             else if (r2.IsDecimal)
@@ -549,8 +547,7 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
 
                 int resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)-expresult) : CountMinimumByteSegments((ulong)expresult);
 
-                ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
-                return new Real64(final);
+                return CreateDecimal((ulong)result, (ulong)expresult, resultOffset);
             }
             else
             {
@@ -558,16 +555,16 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
                 int offsetr1 = r1.GetOffset();
                 int offsetr2 = r2.GetOffset();
 
-                ulong r1segment1flag = (r1.unum >> (4 + (offsetr1 << 3))) & segmentFlags;
+                uint r1segment1flag = (uint)(r1.unum >> (4 + (offsetr1 << 3))) & segmentFlags;
                 ulong r1segment2 = (offsetr1 == 0) ? 0 : (r1.unum >> 4) & offsetMasks[offsetr1];
-                ulong r2segment1flag = (r2.unum >> (4 + (offsetr2 << 3))) & segmentFlags;
+                uint r2segment1flag = (uint)(r2.unum >> (4 + (offsetr2 << 3))) & segmentFlags;
                 ulong r2segment2 = (offsetr2 == 0) ? 0 : (r2.unum >> 4) & offsetMasks[offsetr2];
                 //get flag bits
 
                 if (r1segment2 == r2segment2)
                 {
                     //denominators are the same
-                    if ((r1segment1flag & r2segment1flag) == flagInteger)
+                    if ((r1segment1flag + r2segment1flag) == flagInteger)
                     {
                         // addable
                         long numerator1 = (long)r1.unum >> 8 + (offsetr1 << 3);
@@ -592,8 +589,7 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
 
                         int resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)-expresult) : CountMinimumByteSegments((ulong)expresult);
 
-                        ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
-                        return new Real64(final);
+                        return CreateDecimal((ulong)result, (ulong)expresult, resultOffset);
                     }
                 }
                 else
@@ -608,13 +604,26 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
 
                     int resultOffset = (expresult < 0) ? CountMinimumByteSegments((ulong)-expresult) : CountMinimumByteSegments((ulong)expresult);
 
-                    ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
-                    return new Real64(final);
-
+                    return CreateDecimal((ulong)result, (ulong)expresult, resultOffset);
                 }
 
-                throw new NotImplementedException();
+                //throw new NotImplementedException();
             }
+        }
+
+        private static Real64 CreateDecimal(ulong result, ulong expresult, int resultOffset)
+        {
+            int mantissaoffset = (4 + (resultOffset * 8));
+            ulong maxvalue = (ulong)Math.Pow(2, 63 - mantissaoffset);
+            uint radofffset = 0;
+            while (result > maxvalue)
+            {
+                result = result / 10;
+                radofffset++;
+            }
+            expresult += radofffset;
+            ulong final = (result << mantissaoffset) | ((expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
+            return new Real64(final);
         }
 
         public static Real64 operator -(Real64 r1, Real64 r2)
@@ -828,6 +837,89 @@ private static Real64 IntegerMul(in Real64 r1, in Real64 r2)
                 ulong final = ((ulong)result << (4 + (resultOffset * 8))) | (((ulong)expresult & offsetMasks[resultOffset]) << 4) | ((uint)resultOffset & 0xF);
                 return new Real64(final);
             }
+        }
+
+        public Real64 Sqrt()
+        {
+            if (IsDecimal)
+            {
+                decimal d = ToDecimal();
+                decimal result = Sqrt(d);
+                return FromDecimal(result);
+            }
+            else
+            {
+                int offset = GetOffset();
+                long segment1 = (long)this.unum >> 4 + (offset << 3);
+                uint segment1flag = (uint)segment1 & segmentFlags;
+                segment1 = segment1 >> 4;
+                if (offset == 0)
+                {
+                    if (segment1flag == flagInteger)
+                    {
+                        return FromRadical(2, (int)segment1);
+                    }
+                    decimal d = ToDecimal();
+                    decimal result = Sqrt(d);
+                    return FromDecimal(result);
+                }
+                else
+                {
+                    long segment2 = (long)((this.unum >> 4) & offsetMasks[offset]);
+                    decimal d = ToDecimal();
+                    decimal result = Sqrt(d);
+                    return FromDecimal(result);
+                }
+            }
+        }
+
+        public Real64 NthRoot(int index)
+        {
+            if (IsDecimal)
+            {
+                double d = ToDouble();
+                double result = Math.Pow(d, 1.0 / index);
+                return FromDouble(result);
+            }
+            else
+            {
+                int offset = GetOffset();
+                long segment1 = (long)this.unum >> 4 + (offset << 3);
+                uint segment1flag = (uint)segment1 & segmentFlags;
+                segment1 = segment1 >> 4;
+                if (offset == 0)
+                {
+                    if (segment1flag == flagInteger)
+                    {
+                        return FromRadical(index, (int)segment1);
+                    }
+                    decimal d = ToDecimal();
+                    decimal result = Sqrt(d);
+                    return FromDecimal(result);
+                }
+                else
+                {
+                    long segment2 = (long)((this.unum >> 4) & offsetMasks[offset]);
+                    decimal d = ToDecimal();
+                    decimal result = Sqrt(d);
+                    return FromDecimal(result);
+                }
+            }
+        }
+
+        private static decimal Sqrt(decimal x, decimal epsilon = 0.0M)
+        {
+            if (x < 0) throw new OverflowException("Cannot calculate square root from a negative number");
+
+            decimal current = (decimal)Math.Sqrt((double)x), previous;
+            do
+            {
+                previous = current;
+                if (previous == 0.0M) return 0;
+                current = (previous + (x / previous)) / 2;
+            }
+            while (Math.Abs(previous - current) > epsilon);
+            return current;
         }
     }
 }

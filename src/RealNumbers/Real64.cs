@@ -1,8 +1,10 @@
 ﻿namespace System
 {
     using System;
+    using System.Numerics;
     using System.Runtime.CompilerServices;
     using System.Runtime.InteropServices;
+    using System.Text;
 
     [StructLayout(LayoutKind.Explicit, Size = 8)]
     public readonly partial struct Real64 : IRealNumber, IFormattable
@@ -57,6 +59,8 @@
         private const byte flagKnownSpecial = 0x1;
         private const byte flagRoot = 0x2;
         private const byte flagLog = 0x3;
+
+        private const ulong maxDecimal = 2251799813685248uL;
 
 
         [FieldOffset(0)] readonly ulong unum;
@@ -142,39 +146,64 @@
 
         private static (long mantissa, long offset) ExtractDecimal(decimal num)
         {
+            return ExtractDecimal(num, maxDecimal);
+        }
+
+        private static (long mantissa, long offset) ExtractDecimal(decimal num, ulong maxvalue)
+        {
             const int SignMask = unchecked((int)0x80000000);
             // num = decimal.Round(num, 18);
+            // lo, mid, hi (number) +  flags with scale power 10
             int[] dparts = decimal.GetBits(num);
+            /*
             if (dparts[2] > 0)
             {
                 //TODO: fix large number handling
                 num = decimal.Round(num, 18);
                 dparts = decimal.GetBits(num);
             }
-            // lo, mid, hi (number) +  flags with scale power 10
+            */
 
-            ulong h = (uint)dparts[0] | ((ulong)dparts[1] << 32);
+            byte[] result = new byte[3 * sizeof(int)];
+            Buffer.BlockCopy(dparts, 0, result, 0, result.Length);
+
+            BigInteger br = new BigInteger(result);
+            int redoffset = 0;
+            while (br > maxvalue)
+            {
+                br = br / 10;
+                redoffset++;
+            }
+            //count how many bits needed to store it
+            ulong h = (ulong)br;
+
             int hdigits = CountDigits(h);
 
             int f = dparts[3];
+            // handle negative numbers;
             if ((f & SignMask) != 0)
             {
                 h = ~h + 1;
             }
+
+            // isolate decimal offset
             f = (f & ~SignMask) >> 16;
 
-            f = -(f - 1);
+            // we use -ve numbers for decimals
+            f = -(f - 1) + redoffset;
+
             return ((long)h, f);
         }
 
         public static Real64 FromDecimal(decimal num)
         {
-            (long mantissa, long exp) = ExtractDecimal(num);
+            (long mantissa, long exp) = ExtractDecimal(num, maxDecimal);
             if (exp == 1)
             {
                 // Actually an integer
                 return FromLong(decimal.ToInt64(num));
             }
+
             ulong final = (ulong)mantissa << (SegmentSize + 4) | (((ulong)exp & 0xFF) << 4) | 1ul;
             return new Real64(final);
         }
@@ -319,6 +348,13 @@
             return new Real64(final);
         }
 
+        public static Real64 FromRadical(int index, int radical)
+        {
+            ulong packednumber = ((ulong)radical << 12) | ((ulong)index & 0xFF) << 4 | flagRoot;
+            ulong final = packednumber << 4 | 8ul;
+            return new Real64(final);
+        }
+
         #endregion
 
         #region Conversion
@@ -426,7 +462,7 @@
         /// <returns>The string representation of this instance.</returns>
         public override string ToString()
         {
-            return this.ToString("R");
+            return this.ToString("G");
         }
 
         /// <summary>
@@ -453,6 +489,78 @@
         public string ToString(string format, IFormatProvider provider)
         {
             return Real64.Formatter.Format(format, this, provider);
+        }
+
+        internal string ToGeneralString(string format, IFormatProvider provider)
+        {
+            if (IsDecimal)
+            {
+                (long mantissa, long decimalOffset) = GetDecimalSegments();
+                string intpart = Math.Abs(mantissa).ToString();
+                if (decimalOffset > 1)
+                {
+                    intpart = intpart.PadRight((int)decimalOffset - 1, '0');
+                }
+                StringBuilder final = new StringBuilder();
+                if (mantissa < 0)
+                {
+                    final.Append('-');
+                }
+                int padding = (int)decimalOffset + intpart.Length - 1;
+                if (padding <= 0)
+                {
+                    final.Append("0");
+                    final.Append(".");
+                    padding++;
+
+                    while (padding <= 0)
+                    {
+                        final.Append("0");
+                        padding++;
+                    }
+                    final.Append(intpart);
+                }
+                else
+                {
+                    string rightint = intpart.Substring(0, padding);
+                    string leftint = intpart.Substring(padding);
+                    final.Append(rightint);
+                    final.Append(".");
+                    final.Append(leftint);
+                }
+                return final.ToString();
+            }
+            else
+            {
+                int segmentoffset = GetOffset();
+                if (segmentoffset == 0)
+                {
+                    // its a single number
+                    long p1 = (long)this.unum >> 4;
+                    return GetFractionalPartString(p1);
+                }
+                else
+                {
+                    (long part1, long part2) = GetSegments();
+                    string verbalised = GetFractionalPartString(part1) + '\u2215' + GetFractionalPartString(part2);
+                    return verbalised;
+                }
+            }
+        }
+
+        private string GetFractionalPartString(long number)
+        {
+            ulong flag = (ulong)number & segmentFlags;
+            switch (flag)
+            {
+                case flagRoot:
+                case flagKnownSpecial:
+                case flagLog:
+                case flagInteger:
+                default:
+                    number = number >> 4;
+                    return number.ToString();
+            }
         }
 
         #endregion 
@@ -506,8 +614,8 @@
         private (long part1, long part2) GetSegments()
         {
             int offset = GetOffset();
-            long p1 = (long)this.unum >> (offset << 3);
-            long p2 = (long)this.unum << sizeMantissa[offset] >> sizeMantissa[offset] + 8;
+            long p1 = (long)this.unum >> 4 + (offset << 3);
+            long p2 = (long)this.unum << sizeMantissa[offset] >> sizeMantissa[offset] + 4;
             return (p1, p2);
         }
 
@@ -528,6 +636,11 @@
                     p1 = (long)specialNumbers[p1].DMantissa;
                     break;
                 case flagRoot:
+                    long index = p1 & 0xFF;
+                    long radical = p1 >> 8;
+                    decimal d = new decimal(Math.Pow(radical, 1.0 / index));
+                    (p1, p1offset) = ExtractDecimal(d);
+                    break;
                 case flagLog:
                 default:
                     throw new NotImplementedException();
